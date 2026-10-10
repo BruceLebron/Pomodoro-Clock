@@ -1,5 +1,7 @@
 const { test, expect } = require("@playwright/test");
 const fs = require("node:fs/promises");
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const now = Date.UTC(2026, 9, 11, 2);
 
 test.beforeEach(async ({ page }) => {
@@ -12,6 +14,25 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => { expect(page.__errors).toEqual([]); });
+
+test("直接打开 HTML 可本地计时，刷新保留记录且不尝试不存在的 API", async ({ page }) => {
+  const apiRequests = [];
+  page.on("request", (request) => { if (request.url().includes("/api/sessions")) apiRequests.push(request.url()); });
+  await page.goto(pathToFileURL(path.resolve(__dirname, "../../index.html")).href);
+  await expect(page.locator("#sync-status")).toContainText("仅保存在浏览器");
+  await page.locator("#focus-duration").fill("1");
+  await page.getByRole("button", { name: "保存时长" }).click();
+  await page.locator("#task-name").fill("本地离线专注");
+  await page.getByRole("button", { name: "开始专注" }).click();
+  await page.clock.fastForward(60000);
+  await expect(page.locator("#history-list li")).toHaveCount(1);
+  await expect(page.locator("#history-list")).toContainText("本地离线专注");
+  await page.reload();
+  await expect(page.locator("#history-list li")).toHaveCount(1);
+  await page.locator("#sync-now").click();
+  await expect(page.locator("#sync-status")).toContainText("仅保存在浏览器");
+  expect(apiRequests).toEqual([]);
+});
 
 async function seed(page, value, key = "tomato.state.v2") {
   await page.addInitScript(({ value, key }) => {

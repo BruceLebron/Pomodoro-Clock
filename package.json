@@ -1,13 +1,15 @@
 {
   "name": "tomato-clock",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
-  "description": "无需后端的番茄时钟",
+  "description": "带 Go API 与 SQLite 持久化的番茄时钟",
   "scripts": {
-    "start": "node scripts/serve.cjs",
+    "start": "go run ./cmd/tomato",
+    "start:local": "node scripts/serve.cjs",
     "test": "node --test tests/*.test.cjs",
     "test:e2e": "playwright test",
-    "check": "node --check app.js && node --check timer-core.js && node --check scripts/serve.cjs && npm test && npm run test:e2e"
+    "test:go": "go test ./...",
+    "check": "node --check app.js && node --check timer-core.js && node --check sync.js && node --check scripts/serve.cjs && npm test && go test ./... && go vet ./... && npm run test:e2e"
   },
   "engines": {
     "node": ">=20"

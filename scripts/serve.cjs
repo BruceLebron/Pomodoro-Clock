@@ -9,7 +9,8 @@ const allowed = new Map([
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
   ["/style.css", ["style.css", "text/css; charset=utf-8"]],
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
-  ["/timer-core.js", ["timer-core.js", "text/javascript; charset=utf-8"]]
+  ["/timer-core.js", ["timer-core.js", "text/javascript; charset=utf-8"]],
+  ["/sync.js", ["sync.js", "text/javascript; charset=utf-8"]]
 ]);
 http.createServer((request, response) => {
   const route = allowed.get(new URL(request.url, "http://localhost").pathname);

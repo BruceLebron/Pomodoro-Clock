@@ -49,6 +49,47 @@ test("任务名称有长度限制，未命名记录仍可搜索", () => {
   assert.equal(core.selectSessions(state, "all", "未命名").length, 1);
 });
 
+test("任务名称在 80 单元边界截断时保留完整 emoji，JSON 与 UTF-8 往返保持内容", () => {
+  const atBoundary = core.setTask(core.createState(), "番".repeat(78) + "🍅" + "继续").task;
+  assert.equal(atBoundary, "番".repeat(78) + "🍅");
+  assert.equal(atBoundary.length, 80);
+  const beyondBoundary = core.setTask(core.createState(), "番".repeat(79) + "🍅").task;
+  assert.equal(beyondBoundary, "番".repeat(79));
+  assert.equal(core.setTask(core.createState(), "🍅".repeat(41)).task, "🍅".repeat(40));
+  assert.equal(Buffer.from(atBoundary, "utf8").toString("utf8"), atBoundary);
+  const started = core.start(core.setTask(core.createState(), "番".repeat(79) + "🍅"), 1000000);
+  const finished = core.tick(started, started.endAt).state;
+  assert.deepEqual(core.restore(JSON.parse(JSON.stringify(finished))).sessions, finished.sessions);
+});
+
+test("旧存档孤立代理项修复为替换字符，任务草稿、进行中任务和历史保持一致", () => {
+  const broken = "  学习\uD83D\nGo\uDC00  ";
+  const state = core.restore({
+    version: 2, task: broken, activeTask: broken, mode: "focus", running: true, endAt: 1000000,
+    sessions: [{ completedAt: 999999, minutes: 25, task: broken }]
+  });
+  assert.equal(state.task, "学习\uFFFD Go\uFFFD");
+  assert.equal(state.activeTask, state.task);
+  assert.equal(state.sessions[0].task, state.task);
+  assert.equal(Buffer.from(state.task, "utf8").toString("utf8"), state.task);
+  assert.equal(core.setTask(core.createState(), "番".repeat(79) + " " + "🍅").task, "番".repeat(79));
+});
+
+test("完成时间采用整数毫秒，损坏的浮点历史被隔离且旧计时进度可继续", () => {
+  const state = core.restore({
+    version: 2, mode: "focus", running: true, endAt: 2000000.25, remainingMs: 1000.5,
+    sessions: [{ completedAt: 999999.5, minutes: 25, task: "损坏记录" }, { completedAt: 1000000, minutes: 25, task: "正常记录" }]
+  });
+  assert.equal(state.endAt, 2000001);
+  assert.deepEqual(state.sessions, [{ completedAt: 1000000, minutes: 25, task: "正常记录" }]);
+  const resumed = core.start({ ...state, running: false, endAt: null }, 3000000);
+  assert.equal(resumed.endAt, 3001001);
+  const completed = core.tick(resumed, resumed.endAt);
+  assert.equal(completed.completed.completedAt, 3001001);
+  assert.ok(Number.isInteger(completed.state.sessions.at(-1).completedAt));
+  assert.equal(core.restore({ version: 2, running: true, endAt: 1e30 }).running, false);
+});
+
 test("今天与近七天筛选按自然日处理边界，并按完成时间倒序", () => {
   const now = new Date(2026, 9, 11, 10).getTime();
   const state = core.createState();

@@ -14,6 +14,7 @@
   let historyPage = 1;
   let historyCache;
   const pageSize = 8;
+  let syncClient;
 
   function notify(message) { element("notice").textContent = message; }
   try {
@@ -50,6 +51,34 @@
       storageAvailable = false;
       notify("无法保存进度，请保持页面打开以继续计时。");
     }
+  }
+
+  function updateSyncStatus(status) {
+    if (storageConflict) return;
+    const titles = { syncing: "正在同步记录…", synced: "记录已备份", offline: "记录等待同步", local: "仅保存在浏览器" };
+    const details = {
+      syncing: "浏览器缓存保留，专注可以继续。",
+      synced: "已保存在当前记录服务，换浏览器打开同一服务也可读取。",
+      offline: status.pending ? `服务暂时无法连接，${status.pending} 条记录留在浏览器；恢复后自动同步。` : "服务暂时无法连接，计时与本地保存仍可使用。",
+      local: "当前使用本地页面；连接记录服务后可自动备份历史。"
+    };
+    const label = element("sync-status");
+    label.replaceChildren(Object.assign(document.createElement("span"), { className: "sync-dot" }), document.createTextNode(titles[status.phase] || titles.offline));
+    label.firstChild.setAttribute("aria-hidden", "true");
+    element("sync-detail").textContent = details[status.phase] || details.offline;
+    element("sync-strip").className = `sync-strip ${status.phase}`;
+    element("sync-now").disabled = status.phase === "syncing";
+    element("sync-now").textContent = status.phase === "offline" ? "重试同步" : "同步记录";
+  }
+
+  function syncRecords() {
+    // 直接打开 HTML 时没有记录 API，明确显示本地模式且不发送同步请求。
+    if (!storageConflict && window.location.protocol === "file:") {
+      updateSyncStatus({ phase: "local", pending: 0 });
+      return Promise.resolve();
+    }
+    if (!storageConflict && syncClient) return syncClient.sync();
+    return Promise.resolve();
   }
 
   // 用振荡器合成柔和音效，不依赖音频下载；等待解锁完成，避免首次点击无声。
@@ -106,6 +135,7 @@
     if (completed) {
       persist();
       if (storageConflict) return;
+      if (completed.mode === "focus") void syncRecords();
       void playSound("complete");
       notify(completed.mode === "focus" ? "专注完成，已记录一个番茄。准备好了，就开始休息吧。" : "休息结束。准备好了，再开始一个番茄吧。");
     }
@@ -336,6 +366,7 @@
   });
 
   element("reload-page").addEventListener("click", () => window.location.reload());
+  element("sync-now").addEventListener("click", () => { void syncRecords(); });
   window.addEventListener("storage", (event) => {
     if ((event.key === storageKey || event.key === null) && event.newValue !== storageSnapshot) blockStalePage();
   });
@@ -347,7 +378,24 @@
   element("sound-toggle").checked = state.settings.sound;
   // 重新打开页面时按原结束时间校正；已到期的专注只记录一次。
   advance(); persist(); render();
+  syncClient = window.TomatoSync.createSync({
+    load: () => storageConflict ? [] : state.sessions,
+    merge: (remoteSessions) => {
+      if (storageConflict) return;
+      const sessions = window.TomatoSync.mergeSessions(state.sessions, remoteSessions);
+      // 同步完成时重新合并当前状态，避免请求期间新增的记录被旧回包覆盖。
+      if (JSON.stringify(sessions) !== JSON.stringify(state.sessions)) {
+        state = { ...state, sessions };
+        persist();
+        render();
+      }
+    },
+    onStatus: updateSyncStatus
+  });
+  void syncRecords();
+  setInterval(() => { void syncRecords(); }, 30000);
+  window.addEventListener("online", () => { void syncRecords(); });
   setInterval(() => { advance(); render(); }, 250);
-  document.addEventListener("visibilitychange", () => { advance(); persist(); render(); });
+  document.addEventListener("visibilitychange", () => { advance(); persist(); render(); if (!document.hidden) void syncRecords(); });
   window.addEventListener("pagehide", persist);
 })();

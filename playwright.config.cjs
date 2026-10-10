@@ -22,11 +22,8 @@ module.exports = defineConfig({
     { name: "mobile", use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } }
   ],
   // 测试独占独立端口，避免影响用户正在使用的 4187 预览与存档。
-  webServer: {
-    command: "node scripts/serve.cjs",
-    env: { PORT: "4199" },
-    url: "http://127.0.0.1:4199",
-    reuseExistingServer: false,
-    timeout: 15000
-  }
+  webServer: [
+    { command: "node scripts/serve.cjs", env: { PORT: "4199" }, url: "http://127.0.0.1:4199", reuseExistingServer: false, timeout: 15000 },
+    { command: "node scripts/test-backend.cjs", url: "http://127.0.0.1:4200/healthz", reuseExistingServer: false, timeout: 120000 }
+  ]
 });

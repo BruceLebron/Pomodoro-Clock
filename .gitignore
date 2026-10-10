@@ -8,6 +8,13 @@ node_modules/
 .qa/
 test-results/
 playwright-report/
+# SQLite 持久化与编译产物只保留在本机
+data/
+bin/
+*.db
+*.db-wal
+*.db-shm
+*.exe
 # 本地配置与密钥
 .env
 .env.*

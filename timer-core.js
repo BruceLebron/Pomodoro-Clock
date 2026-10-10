@@ -4,7 +4,19 @@
   const limits = { focus: 180, break: 60 };
   const duration = (state) => state.settings[state.mode] * 60000;
   const validMinute = (value, max) => Number.isInteger(value) && value >= 1 && value <= max;
-  const taskName = (value) => typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 80) : "";
+  function taskName(value) {
+    if (typeof value !== "string") return "";
+    let task = "";
+    // 按码点截断，保留浏览器 maxlength 的 80 个 UTF-16 单元上限。
+    // 旧存档里的孤立代理项先替换为 U+FFFD，避免 Go 解码后内容键变化。
+    for (const character of value.trim().replace(/\s+/g, " ")) {
+      const code = character.charCodeAt(0);
+      const safe = character.length === 1 && code >= 0xD800 && code <= 0xDFFF ? "\uFFFD" : character;
+      if (task.length + safe.length > 80) break;
+      task += safe;
+    }
+    return task.trimEnd();
+  }
 
   function createState() {
     return { version: 2, settings: { focus: 25, break: 5, sound: true }, task: "", activeTask: null, mode: "focus", remainingMs: 1500000, endAt: null, running: false, sessions: [] };
@@ -20,13 +32,13 @@
     if (typeof raw.settings?.sound === "boolean") state.settings.sound = raw.settings.sound;
     state.mode = raw.mode === "break" ? "break" : "focus";
     state.remainingMs = Number.isFinite(raw.remainingMs) && raw.remainingMs >= 0 && raw.remainingMs <= duration(state) ? raw.remainingMs : duration(state);
-    state.running = raw.running === true && Number.isFinite(raw.endAt) && raw.endAt > 0;
-    state.endAt = state.running ? raw.endAt : null;
+    state.running = raw.running === true && Number.isFinite(raw.endAt) && raw.endAt > 0 && raw.endAt <= 8640000000000000;
+    state.endAt = state.running ? Math.ceil(raw.endAt) : null;
     state.task = taskName(raw.task);
     // 第一版记录没有任务名称，升级时保留计时与记录并补齐字段。
     state.activeTask = state.mode === "focus" && (state.running || state.remainingMs < duration(state)) ? taskName(raw.activeTask ?? raw.task) : null;
     if (Array.isArray(raw.sessions)) {
-      state.sessions = raw.sessions.filter((session) => session && Number.isFinite(session.completedAt) && session.completedAt > 0 && session.completedAt <= 8640000000000000 && validMinute(session.minutes, 180)).slice(-1000).map(({ completedAt, minutes, task }) => ({ completedAt, minutes, task: taskName(task) }));
+      state.sessions = raw.sessions.filter((session) => session && Number.isInteger(session.completedAt) && session.completedAt > 0 && session.completedAt <= 8640000000000000 && validMinute(session.minutes, 180)).slice(-1000).map(({ completedAt, minutes, task }) => ({ completedAt, minutes, task: taskName(task) }));
     }
     return state;
   }
@@ -36,7 +48,7 @@
     if (!state.running) return { state, completed: null };
     const remainingMs = Math.min(duration(state), Math.max(0, state.endAt - now));
     if (remainingMs > 0) return { state: { ...state, remainingMs }, completed: null };
-    const completed = { mode: state.mode, completedAt: state.endAt, minutes: state.settings[state.mode], task: state.activeTask ?? state.task };
+    const completed = { mode: state.mode, completedAt: Math.ceil(state.endAt), minutes: state.settings[state.mode], task: state.activeTask ?? state.task };
     const mode = state.mode === "focus" ? "break" : "focus";
     const sessions = state.mode === "focus" ? [...state.sessions, { completedAt: completed.completedAt, minutes: completed.minutes, task: completed.task }].slice(-1000) : state.sessions;
     const next = { ...state, mode, activeTask: null, running: false, endAt: null, sessions };
@@ -47,7 +59,7 @@
   function start(state, now) {
     if (state.running) return state;
     const remainingMs = state.remainingMs > 0 ? state.remainingMs : duration(state);
-    return { ...state, remainingMs, activeTask: state.mode === "focus" ? (state.activeTask ?? state.task) : null, running: true, endAt: now + remainingMs };
+    return { ...state, remainingMs, activeTask: state.mode === "focus" ? (state.activeTask ?? state.task) : null, running: true, endAt: Math.ceil(now + remainingMs) };
   }
 
   function pause(state, now) {
