@@ -2,6 +2,7 @@
 
 ## v0.4.0
 
+- 页头在“番茄 / TOMATO”旁显示当前版本，桌面与手机均可直接识别。
 - 增加 Go 多阶段容器构建、scratch 非 root 镜像与持久数据卷，支持可选 Prometheus Compose profile。
 - 增加 Kubernetes 单副本 Recreate 部署、PVC、ClusterIP、资源限制、安全上下文与启动/存活/就绪探针。
 - 增加可配置 BIND_ADDR 与精确 ALLOWED_HOSTS，默认本机运行方式保持兼容。
