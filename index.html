@@ -28,6 +28,7 @@
           <button id="focus-mode" class="mode active" type="button" aria-pressed="true">专注</button>
           <button id="break-mode" class="mode" type="button" aria-pressed="false">短休息</button>
         </div>
+        <div class="task-field"><label for="task-name">这一刻，你想专注什么？<span id="task-counter">0 / 80</span></label><input id="task-name" type="text" maxlength="80" placeholder="例如：学习 Go、阅读、完成一次集群巡检" autocomplete="off" aria-describedby="task-help"><p id="task-help">可留空。完成一个番茄后，任务会记入专注历史。</p></div>
         <div class="clock">
           <svg class="clock-ring" viewBox="0 0 320 320" aria-hidden="true"><circle class="ring-track" cx="160" cy="160" r="148"/><circle id="ring-progress" class="ring-progress" cx="160" cy="160" r="148"/></svg>
           <div class="clock-face"><p id="mode-caption" class="clock-caption">留给自己的专注时间</p><div id="time-display" class="time-display" role="timer" aria-label="剩余 25 分钟">25:00</div><p id="timer-status" class="timer-status">准备好，就开始吧</p></div>
@@ -59,7 +60,18 @@
         <section class="tip-card"><span class="tip-mark" aria-hidden="true">✳</span><div><h2>休息，也是一种进步</h2><p>起身走走，看看远处。<br>下一次专注，会更有力量。</p></div></section>
       </aside>
     </div>
-    <footer><span>少一点分心，多一点完成。</span><span>本地保存 · 无需登录 <span class="version">v0.1.0</span></span></footer>
+    <section class="history-panel" aria-labelledby="history-heading">
+      <div class="history-heading"><div><p class="eyebrow">SMALL STEPS, REAL PROGRESS</p><h2 id="history-heading">专注，有迹可循。</h2><p>每一个完成的番茄，都是留给自己的小小积累。</p></div><button id="export-history" class="export-button" type="button"><span aria-hidden="true">↓</span> 导出筛选记录 CSV</button></div>
+      <div class="week-overview"><div class="week-summary"><span>最近 7 天</span><strong id="week-minutes">0<small> 分钟</small></strong><p id="week-count">完成 0 个番茄</p></div><div id="week-chart" class="week-chart" role="list" aria-label="最近七天每日专注时长"></div></div>
+      <div class="history-toolbar"><div class="history-filters" role="group" aria-label="记录时间范围"><button type="button" data-history-filter="today" aria-pressed="false">今天</button><button type="button" data-history-filter="week" aria-pressed="false">近 7 天</button><button type="button" data-history-filter="all" class="active" aria-pressed="true">全部</button></div><label class="history-search" for="history-query"><span class="sr-only">搜索任务名称</span><input id="history-query" type="search" maxlength="80" placeholder="搜索任务名称…"></label></div>
+      <p id="history-summary" class="history-summary" role="status" aria-live="polite">共 0 条记录 · 0 分钟</p>
+      <ol id="history-list" class="history-list" aria-label="已完成的专注记录"></ol>
+      <div id="history-empty" class="history-empty"><span aria-hidden="true">◌</span><h3>第一颗番茄，正在等你。</h3><p>完成一次专注后，就能在这里看到记录。</p></div>
+      <div id="history-pagination" class="history-pagination" hidden><button id="history-prev" type="button">上一页</button><span id="history-page"></span><button id="history-next" type="button">下一页</button></div>
+      <p class="history-footnote">仅记录已完成的专注，保存在当前浏览器 · 最多保留最近 1000 条</p>
+      <p id="history-notice" class="history-notice" role="status" aria-live="polite"></p>
+    </section>
+    <footer><span>少一点分心，多一点完成。</span><span>本地保存 · 无需登录 <span class="version">v0.2.0</span></span></footer>
   </main>
 </body>
 </html>

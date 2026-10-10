@@ -1,16 +1,22 @@
 (function () {
   "use strict";
   const core = window.PomodoroCore;
-  const storageKey = "tomato.state.v1";
+  const storageKey = "tomato.state.v2";
   const element = (id) => document.getElementById(id);
   let state = core.createState();
   let audioContext;
   const activeSounds = new Set();
   let storageAvailable = true;
+  let historyFilter = "all";
+  let historyQuery = "";
+  let historyPage = 1;
+  let historyCache;
+  const pageSize = 8;
 
   function notify(message) { element("notice").textContent = message; }
   try {
-    state = core.restore(JSON.parse(localStorage.getItem(storageKey)));
+    // 首次升级读取第一版数据；保留旧键，避免破坏旧版的存档。
+    state = core.restore(JSON.parse(localStorage.getItem(storageKey) ?? localStorage.getItem("tomato.state.v1")));
   } catch {
     // localStorage 不可用时，当前页面的计时仍能运行。
     storageAvailable = false;
@@ -91,6 +97,65 @@
     handleCompletion(result.completed);
   }
 
+  function renderHistory() {
+    const now = Date.now();
+    const day = new Date(now).toDateString();
+    if (historyCache && historyCache.sessions === state.sessions && historyCache.day === day && historyCache.filter === historyFilter && historyCache.query === historyQuery && historyCache.page === historyPage) return;
+    const sessions = core.selectSessions(state, historyFilter, historyQuery, now);
+    const pages = Math.max(1, Math.ceil(sessions.length / pageSize));
+    historyPage = Math.min(historyPage, pages);
+    const minutes = sessions.reduce((sum, session) => sum + session.minutes, 0);
+    element("history-summary").textContent = `共 ${sessions.length} 条记录 · ${minutes} 分钟`;
+    element("export-history").disabled = sessions.length === 0;
+    element("history-empty").hidden = sessions.length > 0;
+    element("history-empty").querySelector("h3").textContent = state.sessions.length ? "这个范围内，还没有记录。" : "第一颗番茄，正在等你。";
+    element("history-empty").querySelector("p").textContent = state.sessions.length ? "试试切换时间范围，或换一个任务关键词。" : "完成一次专注后，就能在这里看到记录。";
+    const dateFormat = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+    const rows = sessions.slice((historyPage - 1) * pageSize, historyPage * pageSize).map((session) => {
+      const row = document.createElement("li");
+      const icon = Object.assign(document.createElement("span"), { className: "record-icon", textContent: "●" });
+      icon.setAttribute("aria-hidden", "true");
+      const detail = Object.assign(document.createElement("div"), { className: "record-detail" });
+      // 用户输入只能作为文本插入，任务中包含 HTML 时也不会执行。
+      const name = Object.assign(document.createElement("strong"), { textContent: session.task || "未命名专注" });
+      const time = Object.assign(document.createElement("time"), { textContent: dateFormat.format(new Date(session.completedAt)), dateTime: new Date(session.completedAt).toISOString() });
+      detail.append(name, time);
+      const duration = Object.assign(document.createElement("span"), { className: "record-duration", textContent: `${session.minutes} 分钟` });
+      row.append(icon, detail, duration);
+      return row;
+    });
+    element("history-list").replaceChildren(...rows);
+    element("history-pagination").hidden = pages <= 1;
+    element("history-page").textContent = `${historyPage} / ${pages}`;
+    element("history-prev").disabled = historyPage <= 1;
+    element("history-next").disabled = historyPage >= pages;
+    for (const button of document.querySelectorAll("[data-history-filter]")) {
+      const active = button.dataset.historyFilter === historyFilter;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
+    const week = core.weekStats(state, now);
+    const totalMinutes = week.reduce((sum, entry) => sum + entry.minutes, 0);
+    element("week-minutes").replaceChildren(document.createTextNode(String(totalMinutes)), Object.assign(document.createElement("small"), { textContent: " 分钟" }));
+    element("week-count").textContent = `完成 ${week.reduce((sum, entry) => sum + entry.count, 0)} 个番茄`;
+    const maxMinutes = Math.max(1, ...week.map((entry) => entry.minutes));
+    element("week-chart").replaceChildren(...week.map((entry, index) => {
+      const column = Object.assign(document.createElement("div"), { className: `chart-column${index === 6 ? " today" : ""}` });
+      const date = new Date(entry.date);
+      column.setAttribute("role", "listitem");
+      column.setAttribute("aria-label", `${date.getMonth() + 1}月${date.getDate()}日：${entry.minutes}分钟，${entry.count}个番茄`);
+      const value = Object.assign(document.createElement("span"), { className: "chart-value", textContent: entry.minutes });
+      const track = Object.assign(document.createElement("div"), { className: "chart-track" });
+      const bar = Object.assign(document.createElement("div"), { className: `chart-bar${entry.minutes === 0 ? " empty" : ""}` });
+      bar.style.height = entry.minutes === 0 ? "4px" : `${Math.max(8, entry.minutes / maxMinutes * 100)}%`;
+      track.append(bar);
+      const label = Object.assign(document.createElement("span"), { className: "chart-label", textContent: index === 6 ? "今天" : `${date.getMonth() + 1}/${date.getDate()}` });
+      column.append(value, track, label);
+      return column;
+    }));
+    historyCache = { sessions: state.sessions, day, filter: historyFilter, query: historyQuery, page: historyPage };
+  }
+
   function render() {
     const focus = state.mode === "focus";
     const seconds = Math.ceil(state.remainingMs / 1000);
@@ -118,12 +183,15 @@
     element("sound-state").textContent = state.settings.sound ? "已开启" : "已关闭";
     element("sound-state").classList.toggle("muted", !state.settings.sound);
     element("preview-sound").disabled = !state.settings.sound;
+    element("task-name").disabled = core.taskLocked(state);
+    element("task-help").textContent = core.taskLocked(state) ? "本轮任务已锁定；完成或重置后可修改。" : state.mode === "break" ? "休息时可以提前写好下一轮的任务。" : "可留空。完成一个番茄后，任务会记入专注历史。";
     const stats = core.todayStats(state, Date.now());
     element("today-count").textContent = stats.count;
     element("today-minutes").replaceChildren(document.createTextNode(String(stats.minutes)), Object.assign(document.createElement("small"), { textContent: " 分钟" }));
     element("today-date").textContent = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(new Date());
     element("stats-hint").textContent = stats.count === 0 ? "种下今天的第一颗番茄。" : `今天已完成 ${stats.count} 个番茄，继续按自己的节奏来。`;
     element("session-dots").replaceChildren(...Array.from({ length: 8 }, (_, index) => Object.assign(document.createElement("span"), { className: `session-dot${index < stats.count ? " done" : ""}` })));
+    renderHistory();
   }
 
   element("start-button").addEventListener("click", () => {
@@ -197,11 +265,61 @@
     notify(played ? "正在试听结束提示音。" : "声音暂时无法播放，请检查浏览器和系统声音设置。");
   });
 
+  element("task-name").addEventListener("input", (event) => {
+    advance();
+    if (core.taskLocked(state)) return;
+    state = core.setTask(state, event.target.value);
+    element("task-counter").textContent = `${event.target.value.length} / 80`;
+    persist();
+  });
+  element("task-name").addEventListener("blur", () => {
+    element("task-name").value = state.task;
+    element("task-counter").textContent = `${state.task.length} / 80`;
+  });
+
+  for (const button of document.querySelectorAll("[data-history-filter]")) {
+    button.addEventListener("click", () => {
+      historyFilter = button.dataset.historyFilter;
+      historyPage = 1;
+      renderHistory();
+    });
+  }
+  element("history-query").addEventListener("input", (event) => {
+    historyQuery = event.target.value;
+    historyPage = 1;
+    renderHistory();
+  });
+  element("history-prev").addEventListener("click", () => { historyPage = Math.max(1, historyPage - 1); renderHistory(); });
+  element("history-next").addEventListener("click", () => { historyPage += 1; renderHistory(); });
+  element("export-history").addEventListener("click", () => {
+    advance();
+    const sessions = core.selectSessions(state, historyFilter, historyQuery, Date.now());
+    if (!sessions.length) { renderHistory(); return; }
+    try {
+      const blob = new Blob([core.toCSV(sessions)], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const date = new Date();
+      link.href = url;
+      link.download = `tomato-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}.csv`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      element("history-notice").textContent = `已生成 ${sessions.length} 条筛选记录的 CSV 文件。`;
+    } catch {
+      element("history-notice").textContent = "浏览器未能导出文件，请在 Chrome 或 Edge 中尝试。";
+    }
+    render();
+  });
+
+  element("task-name").value = state.task;
+  element("task-counter").textContent = `${state.task.length} / 80`;
   element("focus-duration").value = state.settings.focus;
   element("break-duration").value = state.settings.break;
   element("sound-toggle").checked = state.settings.sound;
   // 重新打开页面时按原结束时间校正；已到期的专注只记录一次。
-  advance(); render();
+  advance(); persist(); render();
   setInterval(() => { advance(); render(); }, 250);
   document.addEventListener("visibilitychange", () => { advance(); persist(); render(); });
   window.addEventListener("pagehide", persist);

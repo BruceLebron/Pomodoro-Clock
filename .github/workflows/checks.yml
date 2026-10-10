@@ -16,3 +16,5 @@ jobs:
       # 没有第三方依赖，无需 npm install。
       - run: npm test
       - run: node --check app.js
+      - run: node --check timer-core.js
+      - run: node --check scripts/serve.cjs
