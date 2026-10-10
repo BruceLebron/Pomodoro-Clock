@@ -13,8 +13,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      # 没有第三方依赖，无需 npm install。
+      # 应用无运行时依赖；安装锁定的浏览器测试开发依赖。
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - run: npm test
       - run: node --check app.js
       - run: node --check timer-core.js
       - run: node --check scripts/serve.cjs
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-failures
+          path: test-results/
+          retention-days: 7

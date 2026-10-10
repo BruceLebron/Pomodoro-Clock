@@ -6,6 +6,8 @@ Thumbs.db
 node_modules/
 *.log
 .qa/
+test-results/
+playwright-report/
 # 本地配置与密钥
 .env
 .env.*

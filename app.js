@@ -7,6 +7,8 @@
   let audioContext;
   const activeSounds = new Set();
   let storageAvailable = true;
+  let storageSnapshot = null;
+  let storageConflict = false;
   let historyFilter = "all";
   let historyQuery = "";
   let historyPage = 1;
@@ -16,16 +18,33 @@
   function notify(message) { element("notice").textContent = message; }
   try {
     // 首次升级读取第一版数据；保留旧键，避免破坏旧版的存档。
-    state = core.restore(JSON.parse(localStorage.getItem(storageKey) ?? localStorage.getItem("tomato.state.v1")));
+    storageSnapshot = localStorage.getItem(storageKey);
+    state = core.restore(JSON.parse(storageSnapshot ?? localStorage.getItem("tomato.state.v1")));
   } catch {
     // localStorage 不可用时，当前页面的计时仍能运行。
     storageAvailable = false;
     notify("本地存储不可用或记录损坏；当前页面仍可计时。");
   }
 
+  function blockStalePage() {
+    if (storageConflict) return;
+    storageConflict = true;
+    stopSounds();
+    element("storage-conflict").hidden = false;
+    for (const control of document.querySelectorAll("main button, main input")) {
+      if (control.id !== "reload-page") control.disabled = true;
+    }
+    element("timer-status").textContent = "请刷新以同步最新进度";
+  }
+
   function persist() {
+    if (storageConflict) return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(state));
+      // 旧页离开时可能还没收到 storage 事件，写入前必须再检查快照。
+      if (localStorage.getItem(storageKey) !== storageSnapshot) { blockStalePage(); return; }
+      const serialized = JSON.stringify(state);
+      localStorage.setItem(storageKey, serialized);
+      storageSnapshot = serialized;
       storageAvailable = true;
     } catch {
       storageAvailable = false;
@@ -35,7 +54,7 @@
 
   // 用振荡器合成柔和音效，不依赖音频下载；等待解锁完成，避免首次点击无声。
   async function unlockAudio() {
-    if (!state.settings.sound) return false;
+    if (!state.settings.sound || storageConflict) return false;
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return false;
     try {
@@ -53,7 +72,7 @@
   }
 
   async function playSound(kind = "complete") {
-    if (!await unlockAudio() || !state.settings.sound) return false;
+    if (!await unlockAudio() || !state.settings.sound || storageConflict) return false;
     const melodies = {
       start: { notes: [440, 660], spacing: 0.09, length: 0.18, volume: 0.06 },
       pause: { notes: [440], spacing: 0, length: 0.16, volume: 0.05 },
@@ -86,12 +105,14 @@
   function handleCompletion(completed) {
     if (completed) {
       persist();
+      if (storageConflict) return;
       void playSound("complete");
       notify(completed.mode === "focus" ? "专注完成，已记录一个番茄。准备好了，就开始休息吧。" : "休息结束。准备好了，再开始一个番茄吧。");
     }
   }
 
   function advance() {
+    if (storageConflict) return;
     const result = core.tick(state, Date.now());
     state = result.state;
     handleCompletion(result.completed);
@@ -157,6 +178,7 @@
   }
 
   function render() {
+    if (storageConflict) return;
     const focus = state.mode === "focus";
     const seconds = Math.ceil(state.remainingMs / 1000);
     const minutesText = String(Math.floor(seconds / 60)).padStart(2, "0");
@@ -311,6 +333,11 @@
       element("history-notice").textContent = "浏览器未能导出文件，请在 Chrome 或 Edge 中尝试。";
     }
     render();
+  });
+
+  element("reload-page").addEventListener("click", () => window.location.reload());
+  window.addEventListener("storage", (event) => {
+    if ((event.key === storageKey || event.key === null) && event.newValue !== storageSnapshot) blockStalePage();
   });
 
   element("task-name").value = state.task;

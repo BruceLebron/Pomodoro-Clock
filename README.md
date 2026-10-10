@@ -1,6 +1,6 @@
 # 番茄 · 专注当下
 
-第二版 `v0.2.0`：使用 HTML、CSS 和原生 JavaScript 的番茄时钟，无后端、无第三方依赖。新增任务名称、专注历史、七天统计与 CSV 导出，保留第一版计时和音效功能。
+第二版修复版 `v0.2.1`：使用 HTML、CSS 和原生 JavaScript 的番茄时钟，无后端、无运行时第三方依赖。包含任务名称、专注历史、七天统计与 CSV 导出，保留第一版计时和音效功能。
 
 版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -9,13 +9,13 @@
 直接用浏览器打开 `index.html` 即可。推荐通过本地 HTTP 服务运行，让浏览器存储的来源保持一致。
 
 ```powershell
-# 在项目目录执行，需 Node.js 18 或以上版本
+# 在项目目录执行，推荐 Node.js 22 或以上版本
 npm.cmd start
 # 打开 http://127.0.0.1:4187
 # 在终端按 Ctrl+C 停止服务
 ```
 
-不需要执行 `npm install`。Windows PowerShell 使用 `npm.cmd` 可以避开 `npm.ps1` 的脚本执行策略限制，无需修改系统策略；其他系统使用 `npm start`。VS Code 的 Live Server 也可以预览页面。
+运行网页不需要安装依赖。Windows PowerShell 使用 `npm.cmd` 可以避开 `npm.ps1` 的脚本执行策略限制，无需修改系统策略；其他系统使用 `npm start`。VS Code 的 Live Server 也可以预览页面。运行完整测试需要 Node.js 20 或以上版本及下文的开发依赖。
 
 如果端口被占用，可在 PowerShell 中执行 `$env:PORT = '4188'`，再运行 `npm.cmd start`，并打开对应端口。
 
@@ -50,7 +50,7 @@ remainingMs = Math.max(0, endAt - Date.now());
 
 注意：网页关闭或电脑休眠时无法播放提示音；重新打开或恢复页面时校正状态。刷新后声音可能需要点击按钮才能再次解锁，这是浏览器自动播放策略。更改系统时钟会影响剩余时间。
 
-数据只保存在当前浏览器和当前来源，不上传 GitHub，不跨设备同步。清除浏览器数据会丢失记录。建议同时只打开一个计时页面，当前版本不协调多个标签页。无痕模式、存储受限或损坏时会显示提示，计时仍可运行。
+数据只保存在当前浏览器和当前来源，不上传 GitHub，不跨设备同步。清除浏览器数据会丢失记录。建议同时只打开一个计时页面；另一个页面更新进度后，旧页会停止操作并显示“刷新同步”，保存前也会检查外部更新，避免旧页退出时覆盖新记录。当前版本不支持多页面各自独立计时。无痕模式、存储受限或损坏时会显示提示，计时仍可运行。
 
 升级时优先读取 `tomato.state.v2`，没有第二版存档时自动读取第一版的 `tomato.state.v1`。不会删除旧存档；第一版记录保留日期与时长，任务显示为“未命名专注”。更新后请关闭旧版本标签页，再刷新同一地址；不要更改端口或切换浏览器，否则会使用不同的存储来源。
 
@@ -68,6 +68,8 @@ tests/timer.test.cjs        # 时间计算、状态恢复等测试
 tests/records.test.cjs      # 升级、任务、筛选与导出测试
 CHANGELOG.md               # 版本变化
 .github/workflows/checks.yml # GitHub 自动检查
+playwright.config.cjs      # 隔离浏览器测试配置
+tests/e2e/app.spec.cjs      # 真实浏览器交互与下载验证
 ```
 
 ## 验证
@@ -76,6 +78,24 @@ CHANGELOG.md               # 版本变化
 # 测试计时精度、暂停继续、刷新恢复、重复完成、设置校验及跨日统计
 npm.cmd test
 ```
+
+推送前必须通过完整检查。首次运行浏览器测试时，安装锁定的开发依赖：
+
+```powershell
+npm.cmd ci
+# Windows 默认使用已安装的 Microsoft Edge
+# 其他系统先安装测试用 Chromium
+# npx.cmd playwright install chromium
+
+# 语法检查 + 核心测试 + 桌面/手机浏览器测试
+npm.cmd run check
+```
+
+本地浏览器测试使用独立端口 `4199` 和隔离浏览器存档，不访问 `4187` 的真实用户数据。Windows 需要已安装 Edge；也可在 PowerShell 中设置 `$env:PLAYWRIGHT_CHANNEL = 'chrome'` 后使用已安装的 Chrome。CI 自动安装 Chromium 并执行同一套测试。
+
+任意检查失败时先修复，再重新执行相关检查及完整检查，通过后才提交推送。GitHub Actions 会再运行一次完整检查，失败时保留截图和追踪文件供排查。
+
+本版的验证范围及截图见 [验证记录](docs/validation-v0.2.1.md)。
 
 人工验收：把专注设为 1 分钟，开始 → 暂停 → 继续 → 刷新 → 完成；确认剩余时间恢复、番茄数加 1、切换为休息并等待手动开始。用手机宽度检查布局，用 Tab 和 Enter 检查按钮。
 
@@ -90,9 +110,12 @@ npm.cmd test
 ```powershell
 # 检查提交范围
 git status
+# 先完成验证；失败时停止提交和推送
+npm.cmd run check
 # 仅添加项目文件
 git add .
 git commit -m "feat: 描述本次功能"
+# 检查成功后再推送
 git push
 ```
 
