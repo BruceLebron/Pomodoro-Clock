@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5f0">
+  <meta name="description" content="一个安静的番茄时钟。专注当下，按自己的节奏前进。">
+  <title>番茄 · 专注当下</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='36' r='24' fill='%23d8654f'/%3E%3Cpath d='M32 24 20 10l12 5 12-5z' fill='%233e6556'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script src="timer-core.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="番茄时钟首页"><span class="brand-icon" aria-hidden="true">●<i>✦</i></span><strong>番茄<span> / TOMATO</span></strong></a>
+    <span class="header-note"><span class="status-dot"></span>给重要的事，留一点时间</span>
+  </header>
+  <main>
+    <section class="intro">
+      <p class="eyebrow">ONE THING AT A TIME</p>
+      <h1>专注当下，<span>慢慢来。</span></h1>
+      <p>放下干扰，从一个番茄开始。</p>
+    </section>
+    <div class="workspace">
+      <section class="timer-card" aria-label="番茄计时器">
+        <div class="mode-switch" role="group" aria-label="计时模式">
+          <button id="focus-mode" class="mode active" type="button" aria-pressed="true">专注</button>
+          <button id="break-mode" class="mode" type="button" aria-pressed="false">短休息</button>
+        </div>
+        <div class="clock">
+          <svg class="clock-ring" viewBox="0 0 320 320" aria-hidden="true"><circle class="ring-track" cx="160" cy="160" r="148"/><circle id="ring-progress" class="ring-progress" cx="160" cy="160" r="148"/></svg>
+          <div class="clock-face"><p id="mode-caption" class="clock-caption">留给自己的专注时间</p><div id="time-display" class="time-display" role="timer" aria-label="剩余 25 分钟">25:00</div><p id="timer-status" class="timer-status">准备好，就开始吧</p></div>
+        </div>
+        <div class="timer-actions">
+          <button id="start-button" class="primary-button" type="button"><span id="start-icon" aria-hidden="true">▶</span><span id="start-label">开始专注</span></button>
+          <button id="reset-button" class="reset-button" type="button" title="重置当前计时" aria-label="重置当前计时">↺</button>
+        </div>
+        <p class="timer-hint">一次只做一件事，就已经很好。</p>
+        <p id="notice" class="notice" role="status" aria-live="polite"></p>
+      </section>
+      <aside class="sidebar">
+        <section class="panel today-panel" aria-labelledby="today-heading">
+          <div class="panel-heading"><h2 id="today-heading">今日专注</h2><span id="today-date" class="small-label"></span></div>
+          <div class="stats"><div><strong id="today-count">0</strong><span>完成番茄</span></div><div><strong id="today-minutes">0<small> 分钟</small></strong><span>累计专注</span></div></div>
+          <div class="session-dots" id="session-dots" aria-hidden="true"></div>
+          <p id="stats-hint" class="panel-note">种下今天的第一颗番茄。</p>
+        </section>
+        <section class="panel settings-panel" aria-labelledby="settings-heading">
+          <div class="panel-heading"><h2 id="settings-heading">你的节奏</h2><span class="small-label">分钟</span></div>
+          <form id="settings-form">
+            <div class="duration-fields"><label for="focus-duration">专注时间<input id="focus-duration" name="focus" type="number" min="1" max="180" step="1" value="25" required></label><label for="break-duration">短休息<input id="break-duration" name="break" type="number" min="1" max="60" step="1" value="5" required></label></div>
+            <button id="save-settings" class="secondary-button" type="submit">保存时长</button>
+            <p class="field-hint">专注 1–180 分钟 · 休息 1–60 分钟<br>保存后，当前计时会重置。</p>
+          </form>
+          <div class="sound-row"><label for="sound-toggle">音效开关 <span id="sound-state" class="sound-state">已开启</span><span>操作反馈与计时结束提醒</span></label><input id="sound-toggle" class="toggle" type="checkbox" role="switch" checked></div>
+          <button id="preview-sound" class="secondary-button preview-sound" type="button"><span aria-hidden="true">♫</span> 试听结束提示音</button>
+        </section>
+        <section class="tip-card"><span class="tip-mark" aria-hidden="true">✳</span><div><h2>休息，也是一种进步</h2><p>起身走走，看看远处。<br>下一次专注，会更有力量。</p></div></section>
+      </aside>
+    </div>
+    <footer><span>少一点分心，多一点完成。</span><span>本地保存 · 无需登录 <span class="version">v0.1.0</span></span></footer>
+  </main>
+</body>
+</html>

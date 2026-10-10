@@ -1,0 +1,12 @@
+# 操作系统和本地编辑器文件
+.DS_Store
+Thumbs.db
+.vscode/
+# 依赖、日志及本地验证产物
+node_modules/
+*.log
+.qa/
+# 本地配置与密钥
+.env
+.env.*
+!.env.example
