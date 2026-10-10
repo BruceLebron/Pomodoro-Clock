@@ -1,0 +1,27 @@
+{
+  "type": "monitoring",
+  "runID": "5845b5df-f17c-45c5-ae02-b098d6a951db",
+  "project": "tomato-monitoring-qa-5845b5dff17c45c5ae02b098d6a951db",
+  "version": "0.4.0",
+  "checks": [
+    "随机项目、独立数据卷、随机回环端口及资源归属确认",
+    "真实 targets health=up，PromQL up=1，独立空数据库和写入计数基线=0",
+    "运行中的固定版本 promtool 配置校验与 5 组告警规则测试通过",
+    "Prometheus 已加载且正常计算 3 条告警规则",
+    "真实 POST 首次 saved=1、重复 saved=0，随后 PromQL 写入计数=1"
+  ],
+  "passed": true,
+  "startedAt": "2026-10-10T17:17:55.549Z",
+  "applicationPort": 5783,
+  "prometheusPort": 5784,
+  "prometheusImage": "prom/prometheus:v3.15.0",
+  "alertRules": [
+    "TomatoTargetDown",
+    "TomatoDatabaseErrors",
+    "TomatoAPIErrorRate"
+  ],
+  "sessionsSavedMetric": 1,
+  "cleanedUp": true,
+  "cleanupErrors": [],
+  "finishedAt": "2026-10-10T17:19:01.225Z"
+}

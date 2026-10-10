@@ -1,0 +1,15 @@
+# 构建上下文采用白名单，用户数据库、Git历史与本地验证产物不会进入镜像。
+**
+!Dockerfile
+!.dockerignore
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+!index.html
+!style.css
+!app.js
+!timer-core.js
+!sync.js

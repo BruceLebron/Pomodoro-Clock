@@ -1,0 +1,18 @@
+# 配置对应 Prometheus 3.15：https://prometheus.io/docs/prometheus/3.15/configuration/configuration/
+global:
+  scrape_interval: 15s
+  scrape_timeout: 5s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+scrape_configs:
+  - job_name: tomato
+    metrics_path: /metrics
+    static_configs:
+      # 服务名同时列入应用 ALLOWED_HOSTS，避免放宽到任意 DNS 名称。
+      - targets:
+          - tomato:4187
+
+# 本版在 Prometheus Alerts 页面展示告警；没有配置 Alertmanager 或外部通知。

@@ -61,7 +61,16 @@ test.afterEach(async ({ page }) => {
 test("Go 健康检查与真实页面资源可以访问", async ({ page, request }, testInfo) => {
   const health = await request.get(`${backendURL}/healthz`);
   expect(health.status()).toBe(200);
-  expect(await health.json()).toMatchObject({ status: "ok", version: "0.3.0" });
+  expect(await health.json()).toMatchObject({ status: "ok", version: "0.4.0" });
+  for (const endpoint of ["livez", "readyz"]) {
+    const response = await request.get(`${backendURL}/${endpoint}`);
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "ok", version: "0.4.0" });
+  }
+  const metrics = await request.get(`${backendURL}/metrics`);
+  expect(metrics.status()).toBe(200);
+  expect(metrics.headers()["content-type"]).toContain("text/plain");
+  expect(await metrics.text()).toContain('tomato_build_info{version="0.4.0"} 1');
   const response = await page.goto(backendURL);
   expect(response.status()).toBe(200);
   await expect(page.locator("#time-display")).toHaveText("25:00");

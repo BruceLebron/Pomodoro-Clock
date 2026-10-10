@@ -1,0 +1,68 @@
+services:
+  tomato:
+    build:
+      context: .
+    image: tomato-clock:0.4.0
+    # 宿主机使用 4188，保留已有 4187 开发服务与浏览器存档来源。
+    ports:
+      - "127.0.0.1:4188:4187"
+    environment:
+      PORT: "4187"
+      BIND_ADDR: "0.0.0.0"
+      DB_PATH: "/data/tomato.db"
+      ALLOWED_HOSTS: "tomato"
+      GOMEMLIMIT: "96MiB"
+    volumes:
+      - tomato-data:/data
+    # 只有持久化目录与小型临时目录可写，程序和网页保持只读。
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16777216,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.50
+    stop_grace_period: 15s
+    restart: unless-stopped
+
+  prometheus:
+    # 只有显式启用 --profile monitoring 时才启动监控。
+    profiles:
+      - monitoring
+    # 官方发行版：https://github.com/prometheus/prometheus/releases/tag/v3.15.0
+    image: prom/prometheus:v3.15.0
+    depends_on:
+      tomato:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=256MB
+    volumes:
+      - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/monitoring/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus-data:/prometheus
+    user: "65534:65534"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16777216,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.50
+    stop_grace_period: 15s
+    restart: unless-stopped
+
+volumes:
+  # docker compose down 保留数据；仅明确执行 down --volumes 才删除命名卷。
+  tomato-data:
+  prometheus-data:

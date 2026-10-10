@@ -1,16 +1,20 @@
-# v0.3.0 本机 API
+# v0.4.0 API
 
-默认地址：`http://127.0.0.1:4187`。Go 服务只监听本机，不包含账号体系。响应为 JSON，API 使用 `Cache-Control: no-store`。
+默认本机地址：`http://127.0.0.1:4187`；Compose 为 `http://127.0.0.1:4188`。容器显式监听所有容器网卡，请求 Host 仍受精确白名单限制，不包含账号体系。响应为 JSON，API 使用 `Cache-Control: no-store`。
 
 ## 健康检查
 
 `GET /healthz`
 
 ```json
-{"status":"ok","version":"0.3.0"}
+{"status":"ok","version":"0.4.0"}
 ```
 
 数据库不可连接时返回 HTTP 503。
+
+`GET /livez` 只表示 HTTP 进程存活，不查询数据库；`GET /readyz` 执行数据库 `SELECT 1`，失败返回 503。健康响应均包含当前版本。部署使用 livez 做存活探针、readyz 做就绪探针。
+
+`GET /metrics` 返回 Prometheus 标准指标格式，字段和查询示例见 [部署手册](deployment.md#prometheus)。它不返回任务内容；累计指标在进程重启时归零。
 
 ## 读取完成记录
 
@@ -61,7 +65,7 @@
 | HTTP 状态 | 含义 |
 | --- | --- |
 | 400 | JSON 或字段值非法、批次超过 1000 条 |
-| 403 | 请求 Host 不属于本机，或带有非同源 Origin |
+| 403 | 请求 Host 不在精确白名单，或带有非同源 Origin |
 | 404 | 路径不在接口或静态文件白名单中 |
 | 405 | 请求方法不支持 |
 | 413 | 正文超过 1 MiB |

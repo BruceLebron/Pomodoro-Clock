@@ -1,0 +1,31 @@
+{
+  "type": "kubernetes",
+  "runID": "fceac854-e8f6-43b5-9988-c8a27b9ab36d",
+  "cluster": "tomato-qa-fceac854e8f643b59988c8a27b9ab36d",
+  "version": "0.4.0",
+  "image": "tomato-clock:0.4.0",
+  "nodeImage": "kindest/node:v1.34.3@sha256:08497ee19eace7b4b5348db5c6a1591d7752b164530a36f855cb0f2bdcbadd48",
+  "checks": [
+    "Namespace 引导完成，全部 Kustomize 清单通过 server dry-run/schema/admission 校验",
+    "清单 apply、Deployment rollout、PVC Bound",
+    "单副本 Pod Ready、非 root、只读根目录、drop ALL、禁止提权、三类探针及资源限制",
+    "/healthz HTTP 200",
+    "/livez HTTP 200",
+    "/readyz HTTP 200",
+    "网页 HTML 可访问",
+    "专注记录 API 可访问",
+    "Prometheus 指标可访问",
+    "专注写入及重复提交 saved=0",
+    "/healthz HTTP 200",
+    "/livez HTTP 200",
+    "/readyz HTTP 200",
+    "网页 HTML 可访问",
+    "专注记录 API 可访问",
+    "Prometheus 指标可访问",
+    "Deployment 重启实际替换 Pod，PVC 与 SQLite 历史保持"
+  ],
+  "passed": true,
+  "startedAt": "2026-10-10T17:10:38.952Z",
+  "finishedAt": "2026-10-10T17:13:05.368Z",
+  "cleanupErrors": []
+}

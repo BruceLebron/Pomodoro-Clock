@@ -70,7 +70,7 @@ func decodeList(t *testing.T, app *Server) ([]Session, int) {
 func TestHealthAndUnavailableDatabase(t *testing.T) {
 	app, _ := newTestServer(t)
 	w := request(t, app, "GET", "/healthz", "")
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"ok"`) || !strings.Contains(w.Body.String(), `"version":"0.3.0"`) {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"ok"`) || !strings.Contains(w.Body.String(), `"version":"0.4.0"`) {
 		t.Fatalf("unexpected health: %d %s", w.Code, w.Body.String())
 	}
 	if err := app.Close(); err != nil {

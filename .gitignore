@@ -18,4 +18,5 @@ bin/
 # 本地配置与密钥
 .env
 .env.*
+compose.local.yaml
 !.env.example

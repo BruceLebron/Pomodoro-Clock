@@ -13,12 +13,10 @@ import (
 	"io"
 	"log/slog"
 	"mime"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -27,22 +25,25 @@ import (
 )
 
 const (
-	Version             = "0.3.0"
+	Version             = "0.4.0"
 	MaxSessions         = 1000
 	MaxBodyBytes        = 1 << 20
 	maxDateMillis int64 = 8640000000000000
 )
 
 type Config struct {
-	DBPath    string
-	StaticDir string
-	Logger    *slog.Logger
+	DBPath       string
+	StaticDir    string
+	Logger       *slog.Logger
+	AllowedHosts []string
 }
 
 type Server struct {
-	db        *sql.DB
-	staticDir string
-	logger    *slog.Logger
+	db           *sql.DB
+	staticDir    string
+	logger       *slog.Logger
+	allowedHosts map[string]bool
+	metrics      *metrics
 }
 
 type Session struct {
@@ -61,6 +62,14 @@ type inputSession struct {
 
 // New 创建数据库目录，并把 WAL 与忙等待策略应用于唯一数据库连接。
 func New(config Config) (*Server, error) {
+	allowedHosts := map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
+	for _, name := range config.AllowedHosts {
+		host, err := configuredHostname(name)
+		if err != nil {
+			return nil, fmt.Errorf("invalid allowed hostname %q: %w", name, err)
+		}
+		allowedHosts[host] = true
+	}
 	if config.DBPath == "" {
 		config.DBPath = filepath.Join("data", "tomato.db")
 	}
@@ -102,7 +111,7 @@ func New(config Config) (*Server, error) {
 			return nil, fmt.Errorf("initialize database: %w", err)
 		}
 	}
-	return &Server{db: db, staticDir: staticDir, logger: config.Logger}, nil
+	return &Server{db: db, staticDir: staticDir, logger: config.Logger, allowedHosts: allowedHosts, metrics: newMetrics()}, nil
 }
 
 func (s *Server) Close() error { return s.db.Close() }
@@ -112,26 +121,43 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "no-store")
 	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+	method, route := metricMethod(r.Method), metricRoute(r.URL.Path)
 	defer func() {
-		s.logger.Info("http_request", "method", r.Method, "path", r.URL.Path, "status", recorder.status, "duration_ms", time.Since(started).Milliseconds())
+		elapsed := time.Since(started)
+		s.metrics.observe(method, route, recorder.status, elapsed)
+		s.logger.Info("http_request", "method", method, "route", route, "status", recorder.status, "duration_ms", elapsed.Milliseconds())
 	}()
 	// 即使 TCP 连接落在本机，也拒绝外部域名的 Host，阻断 DNS rebinding 读取或写入。
-	if !validLocalHost(r.Host) {
-		writeError(recorder, http.StatusForbidden, "Host must be a loopback address")
+	if !s.allowedHost(r.Host) {
+		writeError(recorder, http.StatusForbidden, "Host is not allowed")
 		return
 	}
 	switch r.URL.Path {
-	case "/healthz":
+	case "/livez":
 		if r.Method != http.MethodGet {
 			methodNotAllowed(recorder, http.MethodGet)
 			return
 		}
-		if err := s.db.PingContext(r.Context()); err != nil {
+		writeJSON(recorder, http.StatusOK, map[string]string{"status": "ok", "version": Version})
+	case "/healthz", "/readyz":
+		if r.Method != http.MethodGet {
+			methodNotAllowed(recorder, http.MethodGet)
+			return
+		}
+		var ready int
+		if err := s.db.QueryRowContext(r.Context(), "SELECT 1").Scan(&ready); err != nil {
+			s.metrics.databaseErrors.Inc()
 			s.logger.Error("database_health_failed", "error", err)
 			writeError(recorder, http.StatusServiceUnavailable, "database unavailable")
 			return
 		}
 		writeJSON(recorder, http.StatusOK, map[string]string{"status": "ok", "version": Version})
+	case "/metrics":
+		if r.Method != http.MethodGet {
+			methodNotAllowed(recorder, http.MethodGet)
+			return
+		}
+		s.metrics.handler.ServeHTTP(recorder, r)
 	case "/api/sessions":
 		switch r.Method {
 		case http.MethodGet:
@@ -144,30 +170,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.serveStatic(recorder, r)
 	}
-}
-
-func validLocalHost(authority string) bool {
-	host := authority
-	if strings.Contains(authority, ":") && authority != "[::1]" {
-		var port string
-		var err error
-		host, port, err = net.SplitHostPort(authority)
-		if err != nil || port == "" {
-			return false
-		}
-		for _, digit := range port {
-			if digit < '0' || digit > '9' {
-				return false
-			}
-		}
-		number, err := strconv.Atoi(port)
-		if err != nil || number < 1 || number > 65535 {
-			return false
-		}
-	} else if authority == "[::1]" {
-		host = "::1"
-	}
-	return host == "127.0.0.1" || strings.EqualFold(host, "localhost") || host == "::1"
 }
 
 func (s *Server) listSessions(w http.ResponseWriter, r *http.Request) {
@@ -308,6 +310,7 @@ func (s *Server) saveSessions(w http.ResponseWriter, r *http.Request) {
 		s.databaseError(w, err)
 		return
 	}
+	s.metrics.saved.Add(float64(saved))
 	writeJSON(w, http.StatusOK, struct {
 		Sessions []Session `json:"sessions"`
 		Saved    int       `json:"saved"`
@@ -358,6 +361,7 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) databaseError(w http.ResponseWriter, err error) {
+	s.metrics.databaseErrors.Inc()
 	s.logger.Error("database_request_failed", "error", err)
 	writeError(w, http.StatusInternalServerError, "database operation failed")
 }

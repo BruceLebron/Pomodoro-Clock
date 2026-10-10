@@ -1,10 +1,10 @@
 # 番茄 · 专注当下
 
-第三版 `v0.3.0`：原生 HTML、CSS、JavaScript 前端，Go HTTP 服务与 SQLite 完成记录存储。保留计时、音效、任务、历史筛选、七天统计和 CSV 导出；增加旧记录自动导入、离线暂存与同步状态。
+第四版 `v0.4.0`：在 Go + SQLite 番茄时钟上增加 Docker、Kubernetes 和 Prometheus 运维能力。保留计时、音效、任务、历史筛选、七天统计、CSV 导出、旧记录导入与离线同步。
 
-版本变化见 [CHANGELOG.md](CHANGELOG.md)，接口见 [API 文档](docs/api.md)。
+版本变化见 [CHANGELOG.md](CHANGELOG.md)，接口见 [API 文档](docs/api.md)，容器、集群与监控操作见 [部署手册](docs/deployment.md)。
 
-## 启动第三版
+## 本机启动
 
 需要 Go 1.25.5 或以上版本。从项目根目录启动，首次启动会下载 `go.mod`、`go.sum` 锁定的 SQLite 驱动依赖，后续使用本机缓存。
 
@@ -21,7 +21,7 @@ go run ./cmd/tomato
 
 从第二版升级时，先在旧服务终端按 Ctrl+C，再启动上述 Go 服务；关闭旧标签页，重新打开**同一浏览器、同一地址与端口**。页面会自动上传旧的完成记录，显示“记录已备份”后即可用另一浏览器访问同一服务。计时状态与设置仍属于原浏览器。
 
-默认只监听本机 `127.0.0.1:4187`，不提供账号登录或公网访问。端口和数据库路径可通过环境变量设置：
+本机默认监听 `127.0.0.1:4187`，不提供账号登录。容器显式设置 `BIND_ADDR=0.0.0.0`，宿主机仍只发布回环端口；请求 Host 通过精确白名单校验。端口和数据库路径可通过环境变量设置：
 
 ```powershell
 # 可选配置；改变端口会改变浏览器存储来源，升级导入时应保留原端口
@@ -45,6 +45,25 @@ go run ./cmd/tomato
 - 初次加载、完成专注、恢复网络、返回页面与每隔 30 秒尝试同步；支持手动“同步记录”。
 - 服务不可用时继续计时，新记录保存在浏览器，恢复后上传；页面显示待同步数量。
 - 手机布局、键盘操作与减少动态效果的系统偏好。
+- Docker 多阶段构建，非 root 运行、只读根文件系统、持久数据卷。
+- Kubernetes 单副本 Deployment、PVC、ClusterIP、资源限制与三类探针。
+- `/livez` 判断进程存活，`/readyz` 检查数据库；`/healthz` 保留兼容。
+- `/metrics` 提供 Prometheus 请求数、延迟、数据库错误、新记录计数与版本指标。
+- 可选 Prometheus Compose profile，包含采集和三条本地告警规则。
+
+## 容器启动
+
+```powershell
+# 需要已运行的 Docker Linux 引擎
+docker compose up -d --build
+# 容器页面：http://127.0.0.1:4188，与本机开发端口 4187 区分
+docker compose ps
+
+# 可选：一起启动 Prometheus，查看 http://127.0.0.1:9090
+docker compose --profile monitoring up -d --build
+```
+
+容器使用独立命名卷，不自动读取本机 `data/tomato.db`。若需要导入旧浏览器记录，应按部署手册保留原来的浏览器地址与端口，再确认“记录已备份”。`docker compose down` 保留卷，不要用 `--volumes` 停止日常服务。
 
 ## 数据与备份
 
@@ -94,6 +113,12 @@ tests/*.test.cjs            # 计时、历史与同步单元测试
 tests/e2e/                  # 桌面与手机浏览器验收
 docs/                       # API 和验证证据
 .github/workflows/checks.yml # GitHub 自动检查
+Dockerfile / compose.yaml   # 镜像构建与本机容器服务
+deploy/k8s/                 # Kubernetes Kustomize 清单
+deploy/monitoring/          # Prometheus 采集和告警规则
+scripts/test-container.cjs  # 隔离容器、去重和重建持久化验收
+scripts/test-kubernetes.cjs # 隔离 kind 集群、探针和卷持久化验收
+scripts/test-monitoring.cjs # 独立 Compose、真实采集和告警规则验收
 ```
 
 ## 验证与推送规范
@@ -112,11 +137,26 @@ npm.cmd run check
 
 测试使用独立端口 `4199`（静态页）和 `4200`（Go API），隔离浏览器存档及 `.qa/` 临时 SQLite，不读取或写入日常使用的 `4187` 存档。Windows 也可设置 `$env:PLAYWRIGHT_CHANNEL = 'chrome'` 使用已安装的 Chrome。CI 安装 Chromium，执行相同检查。
 
-任何检查失败都先修复并重新验证；完整检查通过后再提交推送，然后确认对应提交的 GitHub Actions 成功。第三版实测范围与截图见 [验证记录](docs/validation-v0.3.0.md)。
+第四版增加容器、监控和 Kubernetes 实际部署验收，监控测试需要 Compose 2.24.4 或以上版本：
+
+```powershell
+# Docker引擎启动后，构建镜像并用临时数据卷测试，结束后清理自身资源
+npm.cmd run test:container
+# 实际采集、重复提交计数，以及告警规则的延迟和低流量抑制
+npm.cmd run test:monitoring
+# 只安装项目内的固定版本测试工具，并校验官方 SHA256
+npm.cmd run tools:kind
+# 独立 kind 测试集群，不使用当前生产 kubeconfig
+$env:TOMATO_KIND_NODE_IMAGE = 'kindest/node:v1.34.3@sha256:08497ee19eace7b4b5348db5c6a1591d7752b164530a36f855cb0f2bdcbadd48'
+npm.cmd run test:kubernetes
+```
+
+任何检查失败都先修复并重新验证；应用、容器、集群检查通过后再提交推送，确认对应提交的 GitHub Actions 两项作业成功。第四版实测范围见 [验证记录](docs/validation-v0.4.0.md)，第三版证据也保留在 [第三版验证记录](docs/validation-v0.3.0.md)。
 
 ```powershell
 # 先验证，再检查提交范围
 npm.cmd run check
+# 部署文件变更还需运行上述容器与 Kubernetes 验收
 git status
 git add .
 git commit -m "feat: 描述本次功能"
@@ -125,4 +165,4 @@ git push
 
 手动验收：完成一次一分钟专注 → 确认“记录已备份” → 用另一浏览器打开同一服务并搜索该任务 → 重启服务确认记录保留。再停止服务，在已打开页面完成专注，确认待同步提示；重新启动服务并点击“重试同步”，确认只新增一条。
 
-后续可以逐步加入容器化、Kubernetes 部署与监控。GitHub 当前保存源代码和检查结果；实际页面与数据库仍通过本地 Go 服务运行。
+GitHub 保存源代码和检查结果；本版没有自动发布镜像或修改用户已有集群。后续可以在现有监控指标上练习 SLO、告警处置与数据库备份恢复，或在引入共享数据库后再讨论多副本架构。

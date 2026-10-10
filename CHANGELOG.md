@@ -1,5 +1,15 @@
 # 版本记录
 
+## v0.4.0
+
+- 增加 Go 多阶段容器构建、scratch 非 root 镜像与持久数据卷，支持可选 Prometheus Compose profile。
+- 增加 Kubernetes 单副本 Recreate 部署、PVC、ClusterIP、资源限制、安全上下文与启动/存活/就绪探针。
+- 增加可配置 BIND_ADDR 与精确 ALLOWED_HOSTS，默认本机运行方式保持兼容。
+- 区分 `/livez` 与 `/readyz`，保留 `/healthz`；程序自带 healthcheck 子命令，无需在容器安装 shell。
+- 增加 Prometheus 请求量、延迟、唯一新增记录、数据库错误与版本指标，避免任务与动态 URL 标签。
+- 提供采集、数据库错误与 API 错误率告警，以及部署、排查、数据迁移和持久化说明。
+- 增加实际容器重建、独立 kind 集群 Pod 重启、Prometheus 真实采集与五组告警规则验收，扩展 GitHub Actions 为应用及部署检查。
+
 ## v0.3.0
 
 - 增加 Go HTTP 服务、SQLite WAL 持久化与 `/healthz` 健康检查。

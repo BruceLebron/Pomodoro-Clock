@@ -1,0 +1,98 @@
+# 使用固定镜像中的 promtool test rules rules.test.yml 验证延迟、触发和低流量抑制。
+rule_files:
+  - rules.yml
+evaluation_interval: 15s
+tests:
+  - name: 健康实例与无错误请求不告警
+    interval: 15s
+    input_series:
+      - series: 'up{job="tomato",instance="tomato:4187"}'
+        values: '1x20'
+      - series: 'tomato_database_errors_total{job="tomato",instance="tomato:4187"}'
+        values: '0x20'
+      - series: 'tomato_http_requests_total{job="tomato",instance="tomato:4187",method="GET",route="/api/sessions",status="200"}'
+        values: '0+10x20'
+      - series: 'tomato_http_requests_total{job="tomato",instance="tomato:4187",method="GET",route="/api/sessions",status="500"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: TomatoTargetDown
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: TomatoDatabaseErrors
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: TomatoAPIErrorRate
+        exp_alerts: []
+
+  - name: 采集持续失败满一分钟才告警
+    interval: 15s
+    input_series:
+      - series: 'up{job="tomato",instance="tomato:4187"}'
+        values: '0x12'
+    alert_rule_test:
+      - eval_time: 45s
+        alertname: TomatoTargetDown
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: TomatoTargetDown
+        exp_alerts:
+          - exp_labels:
+              job: tomato
+              instance: tomato:4187
+              severity: critical
+            exp_annotations:
+              summary: "番茄时钟指标采集失败"
+              description: "tomato:4187 连续 1 分钟无法采集；检查进程、网络与允许的 Host。"
+
+  - name: 数据库错误从正常基线增加后告警
+    interval: 15s
+    input_series:
+      - series: 'tomato_database_errors_total{job="tomato",instance="tomato:4187"}'
+        values: '0 1+0x20'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: TomatoDatabaseErrors
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: TomatoDatabaseErrors
+        exp_alerts:
+          - exp_labels:
+              job: tomato
+              instance: tomato:4187
+              severity: warning
+            exp_annotations:
+              summary: "番茄时钟数据库操作失败"
+              description: "最近 5 分钟出现数据库错误；检查卷空间、文件权限和结构化日志。"
+
+  - name: 足够请求且错误率持续超过阈值才告警
+    interval: 15s
+    input_series:
+      - series: 'tomato_http_requests_total{job="tomato",instance="tomato:4187",method="GET",route="/api/sessions",status="200"}'
+        values: '0+10x20'
+      - series: 'tomato_http_requests_total{job="tomato",instance="tomato:4187",method="GET",route="/api/sessions",status="500"}'
+        values: '0+2x20'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: TomatoAPIErrorRate
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: TomatoAPIErrorRate
+        exp_alerts:
+          - exp_labels:
+              job: tomato
+              instance: tomato:4187
+              severity: warning
+            exp_annotations:
+              summary: "番茄时钟记录 API 错误率超过 5%"
+              description: "tomato:4187 的记录 API 在有足够请求时持续出现高错误率；检查应用日志和数据库。"
+
+  - name: 仅一次失败请求不因比例百分之百而触发高错误率
+    interval: 15s
+    input_series:
+      - series: 'tomato_http_requests_total{job="tomato",instance="tomato:4187",method="GET",route="/api/sessions",status="500"}'
+        values: '0 1+0x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TomatoAPIErrorRate
+        exp_alerts: []

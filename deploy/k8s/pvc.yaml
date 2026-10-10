@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tomato-data
+  labels:
+    app.kubernetes.io/name: tomato-clock
+spec:
+  # 使用集群默认 StorageClass；生产环境请按实际存储后端显式指定。
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

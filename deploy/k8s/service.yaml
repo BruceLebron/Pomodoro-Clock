@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tomato
+  labels:
+    app.kubernetes.io/name: tomato-clock
+spec:
+  # 只提供集群内入口；本机学习使用 kubectl port-forward，暂不创建公网入口。
+  # 已有 Prometheus 可采集 tomato.tomato.svc.cluster.local:4187/metrics。
+  # 不默认按 Pod IP 自动发现，避免使用未列入 ALLOWED_HOSTS 的 HTTP Host。
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tomato-clock
+  ports:
+    - name: http
+      port: 4187
+      targetPort: http

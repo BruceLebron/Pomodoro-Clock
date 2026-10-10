@@ -1,0 +1,38 @@
+groups:
+  - name: tomato-availability
+    rules:
+      - alert: TomatoTargetDown
+        expr: up{job="tomato"} == 0
+        # 短暂重启不立即告警，连续四次左右采集失败再进入 firing。
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "番茄时钟指标采集失败"
+          description: "{{ $labels.instance }} 连续 1 分钟无法采集；检查进程、网络与允许的 Host。"
+
+      - alert: TomatoDatabaseErrors
+        expr: increase(tomato_database_errors_total{job="tomato"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "番茄时钟数据库操作失败"
+          description: "最近 5 分钟出现数据库错误；检查卷空间、文件权限和结构化日志。"
+
+      - alert: TomatoAPIErrorRate
+        # 只衡量记录 API，探针和静态页面不会稀释错误比例；至少 10 个请求再判断。
+        expr: |
+          (
+            sum by (job, instance) (rate(tomato_http_requests_total{job="tomato",route="/api/sessions",status=~"5.."}[5m]))
+            /
+            sum by (job, instance) (rate(tomato_http_requests_total{job="tomato",route="/api/sessions"}[5m]))
+          ) > 0.05
+          and on (job, instance)
+          sum by (job, instance) (increase(tomato_http_requests_total{job="tomato",route="/api/sessions"}[5m])) >= 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "番茄时钟记录 API 错误率超过 5%"
+          description: "{{ $labels.instance }} 的记录 API 在有足够请求时持续出现高错误率；检查应用日志和数据库。"

@@ -1,0 +1,28 @@
+{
+  "type": "container",
+  "runID": "07240bb9-7fe3-4da1-9b2c-bd2f98e04b32",
+  "version": "0.4.0",
+  "image": "tomato-clock:0.4.0",
+  "checks": [
+    "运行进程 UID 10001、只读根目录拒绝写入、drop ALL、no-new-privileges",
+    "/healthz HTTP 200",
+    "/livez HTTP 200",
+    "/readyz HTTP 200",
+    "网页 HTML 可访问",
+    "专注记录 API 可访问",
+    "Prometheus 指标可访问",
+    "专注写入及重复提交 saved=0",
+    "Docker HEALTHCHECK healthy",
+    "/healthz HTTP 200",
+    "/livez HTTP 200",
+    "/readyz HTTP 200",
+    "网页 HTML 可访问",
+    "专注记录 API 可访问",
+    "Prometheus 指标可访问",
+    "删除并重建容器后同一测试卷的 SQLite 记录保留"
+  ],
+  "passed": true,
+  "startedAt": "2026-10-10T17:11:25.067Z",
+  "finishedAt": "2026-10-10T17:11:43.209Z",
+  "cleanupErrors": []
+}

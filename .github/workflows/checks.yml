@@ -26,3 +26,33 @@ jobs:
           name: browser-test-failures
           path: test-results/
           retention-days: 7
+  deployment-tests:
+    needs: timer-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # kind 与节点镜像固定配对，不复用用户集群。
+      TOMATO_KIND_NODE_IMAGE: kindest/node:v1.34.3@sha256:08497ee19eace7b4b5348db5c6a1591d7752b164530a36f855cb0f2bdcbadd48
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/bootstrap-kind.cjs
+      - name: 检查 Compose 与 Kubernetes 渲染
+        run: |
+          docker compose config --quiet
+          kubectl kustomize deploy/k8s > .qa/kubernetes.yaml
+      - name: 容器持久化与健康验收
+        run: npm run test:container
+      - name: Prometheus 实际采集与告警规则验收
+        run: npm run test:monitoring
+      - name: 隔离 Kubernetes 部署与重启验收
+        run: npm run test:kubernetes
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deployment-validation
+          path: .qa/validation-*.json
+          include-hidden-files: true
+          retention-days: 7
